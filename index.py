@@ -3,23 +3,30 @@ from pysnmp.hlapi import getCmd, SnmpEngine, CommunityData, UdpTransportTarget, 
 
 cpu_oid = '1.3.6.1.4.1.9.2.1.58.0'
 
-iterator = getCmd(
-    SnmpEngine(),
-    CommunityData('daniel', mpModel=0), # Mi Comunidad es daniel
-    UdpTransportTarget(('192.168.2.10', 161)), # HOST, PUERTO
-    ContextData(),
-    ObjectType(ObjectIdentity(cpu_oid)) # PONER EL OID DEL ROUTER
-)
+comunidad = "daniel"
 
-errorIndication, errorStatus, errorIndex, varBinds = next(iterator)
+with open('ips.txt') as wordlist:
+    for line in wordlist:
+        print(line.strip()) # Recoger IPS.
+        
+        iterator = getCmd(
+            SnmpEngine(),
+            CommunityData(comunidad, mpModel=0), # Mi Comunidad es daniel
+            UdpTransportTarget((line.strip(), 161)), # HOST, PUERTO APLICO UN STRIP PARA QUITAR LOS ESPACIOS ENTRE LAS IPS
+            ContextData(),
+            ObjectType(ObjectIdentity(cpu_oid)) # PONER EL OID DEL ROUTER
+        )
 
-if errorIndication:
-    print(errorIndication)
+        errorIndication, errorStatus, errorIndex, varBinds = next(iterator)
 
-elif errorStatus:
-    print('%s at %s' % (errorStatus.prettyPrint(),
-                        errorIndex and varBinds[int(errorIndex) - 1][0] or '?'))
+        if errorIndication:
+            print(errorIndication)
 
-else:
-    for varBind in varBinds:
-        print(' = '.join([x.prettyPrint() for x in varBind]))
+        elif errorStatus:
+            print('%s at %s' % (errorStatus.prettyPrint(),
+                                errorIndex and varBinds[int(errorIndex) - 1][0] or '?'))
+
+        else:
+            for varBind in varBinds:
+                print(' = '.join([x.prettyPrint() for x in varBind]))
+        
