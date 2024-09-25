@@ -5,28 +5,30 @@ cpu_oid = '1.3.6.1.4.1.9.2.1.58.0'
 
 comunidad = "daniel"
 
+pregunta = input("Dime la ip a analizar: ")
+
 with open('ips.txt') as wordlist:
     for line in wordlist:
-        print(line.strip()) # Recoger IPS.
-        
-        iterator = getCmd(
-            SnmpEngine(),
-            CommunityData(comunidad, mpModel=0), # Mi Comunidad es daniel
-            UdpTransportTarget((line.strip(), 161)), # HOST, PUERTO APLICO UN STRIP PARA QUITAR LOS ESPACIOS ENTRE LAS IPS
-            ContextData(),
-            ObjectType(ObjectIdentity(cpu_oid)) # PONER EL OID DEL ROUTER
-        )
+        if pregunta == line.strip():
+            print("Obteniendo informacion de la IP: ",line.strip()) # Recoger IPS.
+            
+            iterator = getCmd(
+                SnmpEngine(),
+                CommunityData(comunidad, mpModel=0), # Mi Comunidad es daniel
+                UdpTransportTarget((line.strip(), 161)), # HOST, PUERTO APLICO UN STRIP PARA QUITAR LOS ESPACIOS ENTRE LAS IPS
+                ContextData(),
+                ObjectType(ObjectIdentity(cpu_oid)) # PONER EL OID DEL ROUTER
+            )
 
-        errorIndication, errorStatus, errorIndex, varBinds = next(iterator)
+            errorIndication, errorStatus, errorIndex, varBinds = next(iterator)
 
-        if errorIndication:
-            print(errorIndication)
+            if errorIndication:
+                print(errorIndication)
 
-        elif errorStatus:
-            print('%s at %s' % (errorStatus.prettyPrint(),
-                                errorIndex and varBinds[int(errorIndex) - 1][0] or '?'))
+            elif errorStatus:
+                print('%s at %s' % (errorStatus.prettyPrint(),
+                                    errorIndex and varBinds[int(errorIndex) - 1][0] or '?'))
 
-        else:
-            for varBind in varBinds:
-                print(' = '.join([x.prettyPrint() for x in varBind]))
-        
+            else:
+                for varBind in varBinds:
+                    print(' = '.join([x.prettyPrint() for x in varBind]))
