@@ -1,7 +1,31 @@
 #from pysnmp.hlapi import *
 from pysnmp.hlapi import getCmd, SnmpEngine, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity
+from netmiko import ConnectHandler
 
 cpu_oid = '1.3.6.1.4.1.9.2.1.58.0'
+
+# NETMIKO
+
+cisco_881 = {
+    'device_type': 'cisco_ios',
+    'host':   '192.168.2.10',
+    'username': 'daniel',
+    'password': 'daniel',
+    'port' : 22,          # optional, defaults to 22
+    'secret': '',     # optional, defaults to ''
+}
+
+MT = {
+    'device_type': 'mikrotik_routeros',
+    'host': '192.168.1.1',
+    'username': 'admin',
+    'password': '',
+}
+
+net_connect = ConnectHandler(**cisco_881)
+
+output = net_connect.send_command('show ip int brief')
+print(output)
 
 #comunidad = "daniel"
 
