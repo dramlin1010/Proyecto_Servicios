@@ -26,73 +26,62 @@ class Router:
         output = self.net_connect.send_command(comd)
         print(output)
 
-    def snmp(comunidad, ip):
-        iterator = getCmd(
-                            SnmpEngine(),
-                            CommunityData(comunidad, mpModel=0),
-                            UdpTransportTarget((ip, 161)),
-                            ContextData(),
-                            ObjectType(ObjectIdentity(cpu_oid)) # OID
-                        )
-        errorIndication, errorStatus, errorIndex, varBinds = next(iterator)
+def snmp(comunidad, ip):
+    iterator = getCmd(
+        SnmpEngine(),
+        CommunityData(comunidad, mpModel=0),
+        UdpTransportTarget((ip, 161)),
+        ContextData(),
+        ObjectType(ObjectIdentity(cpu_oid)) # OID
+    )
+    errorIndication, errorStatus, errorIndex, varBinds = next(iterator)
 
-        if errorIndication:
-                if "No SNMP response received before timeout" in str(errorIndication):
-                    print("[-] Pasando a la siguiente comunidad.")
-            #print(errorIndication)
+    if errorIndication:
+            if "No SNMP response received before timeout" in str(errorIndication):
+                print("[-] Pasando a la siguiente comunidad.")
 
-        elif errorStatus:
-            print('%s at %s' % (errorStatus.prettyPrint(),
-                                errorIndex and varBinds[int(errorIndex) - 1][0] or '?'))
+    elif errorStatus:
+        print('%s at %s' % (errorStatus.prettyPrint(),
+                            errorIndex and varBinds[int(errorIndex) - 1][0] or '?'))
 
-        else:
-            for varBind in varBinds:
-                print(' = '.join([x.prettyPrint() for x in varBind]))
-            #exit()
-import time
+    else:
+        for varBind in varBinds:
+            print(' = '.join([x.prettyPrint() for x in varBind]))
 
 if __name__ == "__main__":
-    Router.snmp('noruega','192.168.2.10')
-    time.sleep(10)
-    cisco = Router("cisco_ios", "192.168.2.10", "daniel", "daniel", 22)
-    mikrotik = Router("mikrotik_routeros", "192.168.2.11", "daniel", "daniel", 22)
-    cisco.conexion()
-    #mikrotik.conexion()
-    cisco.comando('show running-config')
+    with open("ips.txt", "r") as ips, open("comunidades.txt", "r") as comunidades: # Leyendo ficheros
+        ips = ips.read().splitlines()  # Lista de IPs
+        comunidades = comunidades.read().splitlines()  # Lista de comunidades
 
-"""
+    choice = input("Quieres ejecutar un comando o consultar una IP por SNMP? (comando/snmp): ").strip()
 
-pregunta = input("Dime la ip a analizar: ")
-with open('ips.txt') as wordlist:
-    for line in wordlist:
-            if pregunta == line.strip():
-                print("Obteniendo informacion de la IP: ",line.strip()) # Recoger IPS.
-                with open('comunidades.txt') as comunidades:
-                    for comunidad in comunidades:
-                        print("Probando Comunidad: %s" % comunidad)
-                        
-                        iterator = getCmd(
-                            SnmpEngine(),
-                            CommunityData(comunidad.strip(), mpModel=0), # Mi Comunidad es daniel
-                            UdpTransportTarget((line.strip(), 161)), # HOST, PUERTO APLICO UN STRIP PARA QUITAR LOS ESPACIOS ENTRE LAS IPS
-                            ContextData(),
-                            ObjectType(ObjectIdentity(cpu_oid)) # PONER EL OID DEL ROUTER
-                        )
+    if choice == "comando":
+        router_type = input("Selecciona el tipo de router (cisco, mikrotik, bird, juniper): ").strip()
 
-                        errorIndication, errorStatus, errorIndex, varBinds = next(iterator)
+        if router_type == "cisco":
+            device_type = "cisco_ios"
+        elif router_type == "mikrotik":
+            device_type = "mikrotik_routeros"
+        elif router_type == "bird":
+            device_type = "linux"
+        elif router_type == "juniper":
+            device_type = "juniper"
+        else:
+            print("Tipo de router no valido.")
+            exit(1)
 
-                        if errorIndication:
-                             if "No SNMP response received before timeout" in str(errorIndication):
-                                  print("[-] Pasando a la siguiente comunidad.")
-                            #print(errorIndication)
+        command = input("Introduce el comando que deseas ejecutar: ").strip()
 
-                        elif errorStatus:
-                            print('%s at %s' % (errorStatus.prettyPrint(),
-                                                errorIndex and varBinds[int(errorIndex) - 1][0] or '?'))
+        for ip, comunidad in zip(ips, comunidades):
+            print(f"\nConectando al router con IP {ip} y comunidad {comunidad}...")
+            router = Router(device_type, ip, "daniel", "daniel", 22) # Poniendo las creds por defecto.
+            router.conexion()
+            router.comando(command)
 
-                        else:
-                            for varBind in varBinds:
-                                print(' = '.join([x.prettyPrint() for x in varBind]))
-                            exit()
+    elif choice == "snmp":
+        for ip, comunidad in zip(ips, comunidades):
+            print(f"\nConsultando SNMP para IP {ip} y comunidad {comunidad}...")
+            snmp(comunidad, ip)
 
-"""
+    else:
+        print("No valido. Por favor, elige 'comando' o 'snmp'.")
