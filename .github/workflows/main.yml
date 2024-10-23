@@ -11,9 +11,9 @@ jobs:
   steps:
    - name: Checkout Repository
      uses: actions/checkout@v4
-   - name: INSTALAR TERRAFORM EN LA MAQUINA VIRTUAL
-     uses: actions/setup-terraform@v3
-   - name: CONFIGURAR CREDENCIALES AWS7
+   - name: Instalar terraform
+     uses: hashicorp/setup-terraform@v3
+   - name: Credenciales AWS
      uses: aws-actions/configure-aws-credentials@v4
      with:
        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
