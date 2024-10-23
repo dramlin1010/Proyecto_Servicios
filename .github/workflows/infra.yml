@@ -3,7 +3,8 @@ on:
   push:
     branches:
       - VPC_Infra
-      
+  workflow_dispatch:
+  
 jobs:
  terraform: # NOMBRE OPCIONAL
   runs-on: ubuntu-latest
