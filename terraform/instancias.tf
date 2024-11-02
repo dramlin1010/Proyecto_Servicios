@@ -17,7 +17,7 @@ resource "aws_security_group" "sg_ftp_instancia" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # FTP Pasivo
+  # Puertos Pasivo
   ingress {
     from_port   = 1024
     to_port     = 1048
@@ -68,8 +68,49 @@ resource "aws_instance" "ftp_instancia" {
   subnet_id     = aws_subnet.public_subnet_vpc_1.id
   key_name      = "Terraform"
   vpc_security_group_ids = [aws_security_group.sg_ftp_instancia.id]
+  user_data = <<-EOF
+#!/bin/bash
+sudo apt update -y
+sudo apt install vim -y
+# DOCKER
+sudo apt install ca-certificates curl -y
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-compose -y
+sudo apt install jq -y
+mkdir /home/admin/ftp-docker
+cd /home/admin/ftp-docker
+
+# Crear Dockerfile
+cat <<-DOCKERFILE > dockerfile
+FROM debian:12
+RUN apt update && \\
+    apt install proftpd -y
+RUN echo "PassivePorts 1024 1048" >> /etc/proftpd/proftpd.conf && \\
+    echo "MasqueradeAddress $(curl -s https://api.myip.com | jq -r '.ip')" >> /etc/proftpd/proftpd.conf && \\
+    echo "DefaultRoot ~" >> /etc/proftpd/proftpd.conf && \\
+    echo "UseIPv6 off" >> /etc/proftpd/proftpd.conf
+RUN useradd -m -s /bin/bash ${var.ftp_user} && echo "${var.ftp_user}:${var.ftp_password}" | chpasswd
+EXPOSE 20 21 990 1024-1048
+CMD ["/usr/sbin/proftpd", "--nodaemon"]
+DOCKERFILE
+
+sudo docker build -t mi_proftpd /home/admin/ftp-docker
+sudo docker run -d --name proftpd_server -p 21:21 -p 20:20 -p 990:990 -p 1024-1048:1024-1048 mi_proftpd
+
+sudo chown admin:admin /home/admin/ftp-docker
+sudo chmod 700 /home/admin/ftp-docker
+              EOF
+
   
   tags = {
-    Name = "FTP VPC 1"
+    Name = "Proftpd"
   }
 }
