@@ -46,6 +46,32 @@ resource "aws_security_group" "sg_ftp_instancia" {
   }
 }
 
+# Security Group para la instancia bastión
+resource "aws_security_group" "bastionado_sg" {
+  name   = "bastionado_sg"
+  vpc_id = aws_vpc.vpc_1.id
+
+  ingress {
+    description      = "Allow SSH"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = [var.ip]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "SG para Bastion"
+  }
+}
+
+
 # IP Elastica
 resource "aws_eip" "ip_elastica_ftp" {
   instance = aws_instance.ftp_instancia.id
@@ -60,6 +86,23 @@ resource "aws_eip_association" "asociar_ip_elastica" {
   instance_id   = aws_instance.ftp_instancia.id
   allocation_id = aws_eip.ip_elastica_ftp.id
 }
+
+# Instancia Bastionado
+resource "aws_instance" "bastion_instancia" {
+  ami                    = "ami-064519b8c76274859"
+  instance_type          = "t2.micro"
+  subnet_id              = aws_subnet.public_subnet_vpc_1.id
+  key_name               = "Terraform"
+  associate_public_ip_address = true
+  vpc_security_group_ids = [aws_security_group.bastionado_sg.id]
+
+  #security_groups = [aws_security_group.bastionado_sg.name]
+
+  tags = {
+    Name = "Bastionado"
+  }
+}
+
 
 # Instancia para la subnet 1
 resource "aws_instance" "ftp_instancia" {
