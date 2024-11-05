@@ -33,9 +33,10 @@ jobs:
       - name: Subir terraform.tfstate a S3
         uses: jakejarvis/s3-sync-action@master
         with:
-          args: --acl public-read --follow-symlinks --delete
+          args: "--acl private --follow-symlinks"
+          source_dir: terraform/terraform.tfstate
+          dest_dir: "terraform/"  # Ruta en S3
         env:
-          source-dir: terraform/terraform.tfstate
           AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
