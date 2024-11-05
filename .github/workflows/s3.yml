@@ -31,8 +31,9 @@ jobs:
         working-directory: terraform
 
       - name: Subir terraform.tfstate a S3
-        uses: aws-actions/s3-sync-action@v1
+        uses: jakejarvis/s3-sync-action@master
         with:
           source-dir: terraform/terraform.tfstate
-          bucket: s3-test-daniel-bucket-lol
-          destination-dir: terraform/ # Carpeta del S3
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
