@@ -4,6 +4,11 @@ on:
     branches:
       - VPC_Infra
   workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: "Escribe 'yes' para confirmar la destruccion"
+        required: true
+        default: "no"
 
 jobs:
   terraform-destroy:
