@@ -13,7 +13,6 @@ on:
 jobs:
   terraform-destroy:
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.confirm_destroy == 'yes' }} 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -43,3 +42,4 @@ jobs:
       - name: Destroy Terraform
         run: terraform destroy
         working-directory: terraform
+    if: ${{ github.event.inputs.confirm_destroy == 'yes' }}
