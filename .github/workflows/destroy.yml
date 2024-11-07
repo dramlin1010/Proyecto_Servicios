@@ -2,7 +2,7 @@ name: Terraform AWS Destroy
 on:
   push:
     branches:
-      - destroy
+      - VPC_Infra
 
 jobs:
   terraform-destroy:
