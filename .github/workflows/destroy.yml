@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - VPC_Infra
+  workflow_dispatch:
 
 jobs:
   terraform-destroy:
@@ -34,5 +35,5 @@ jobs:
         working-directory: terraform
 
       - name: Destroy Terraform
-        run: terraform destroy -auto-approve
+        run: terraform destroy
         working-directory: terraform
