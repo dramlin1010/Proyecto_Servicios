@@ -112,19 +112,30 @@ resource "aws_route" "public_route_vpc_1" {
   gateway_id             = aws_internet_gateway.igw_vpc_1.id
 }
 
-# Ruta predeterminada para la tabla de enrutamiento pública de VPC 2
 resource "aws_route" "public_route_vpc_2" {
   route_table_id         = aws_route_table.public_route_table_vpc_2.id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.igw_vpc_2.id
 }
 
-# Tabla de enrutamiento privada para VPC 2 (sin ruta de Internet)
 resource "aws_route_table" "private_route_table_vpc_2" {
   vpc_id = aws_vpc.vpc_2.id
   tags = {
     Name = "Tabla Enrutamiento Privada VPC 2"
   }
+}
+
+# Metiendo en las subnets una tabla de enrutamiento con el peering creado antes para que puedan comunicarse
+resource "aws_route" "private_route_vpc2_to_vpc1" {
+  route_table_id            = aws_route_table.private_route_table_vpc_2.id
+  destination_cidr_block    = var.Subnet_VPC1
+  vpc_peering_connection_id = aws_vpc_peering_connection.vpc_peering.id
+}
+
+resource "aws_route" "private_route_to_private_subnet_vpc_2" {
+  route_table_id            = aws_route_table.public_route_table_vpc_1.id
+  destination_cidr_block    = var.Subnet_Private_VPC2
+  vpc_peering_connection_id = aws_vpc_peering_connection.vpc_peering.id
 }
 
 # Asociar la subred con la ruta
