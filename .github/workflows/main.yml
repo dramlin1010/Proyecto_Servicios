@@ -25,7 +25,7 @@ jobs:
      working-directory: terraform # AQUI PONEMOS EL DIRECTORIO DE TRABAJO EN DONDE TENEMOS EL .TF
 
    - name: apply terraform
-     run: terraform apply -auto-approve
+     run: terraform apply -auto-approve -var "public_key=${{ secrets.SSH_PUBLIC_KEY }}"
      working-directory: terraform
 
    - name: upload terraform state
