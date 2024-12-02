@@ -1,0 +1,45 @@
+name: Terraform AWS Destroy
+on:
+  push:
+    branches:
+      - VPC_Infra
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: "Escribe 'yes' para confirmar la destruccion"
+        required: true
+        default: "no"
+
+jobs:
+  terraform-destroy:
+    if: ${{ github.event.inputs.confirm_destroy == 'yes' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Instalar terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: AWS Creds
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Descargar el tfstate de S3
+        run: aws s3 cp s3://${{ secrets.AWS_S3_BUCKET }}/terraform.tfstate terraform/terraform.tfstate
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: 'us-east-1'
+
+      - name: Init Terraform
+        run: terraform init
+        working-directory: terraform
+
+      - name: Destroy Terraform
+        run: terraform destroy -auto-approve -var "public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+        working-directory: terraform
