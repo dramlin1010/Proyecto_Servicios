@@ -24,11 +24,6 @@ variable "ftp_password" {
   type = string
 }
 
-variable "ip" {
-  description = "IP destinado a bastionado"
-  type = string
-}
-
 variable "aws_access_key_id"{
   description = "access key amazon"
   type = string
@@ -42,4 +37,14 @@ variable "aws_secret_access_key"{
 variable "aws_session_token" {
   description = "session token"
   type = string
+}
+
+variable "susana_key" {
+  description = "Key de susana"
+  type = string
+}
+
+variable "public_key" {
+  description = "Clave publica"
+  type        = string
 }

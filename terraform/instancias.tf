@@ -56,14 +56,14 @@ resource "aws_security_group" "sg_ftp_instancia" {
 
 resource "aws_security_group" "bastionado_sg" {
   name   = "bastionado_sg"
-  vpc_id = aws_vpc.vpc_1.id
+  vpc_id = aws_vpc.vpc_2.id
 
   ingress {
     description      = "Allow SSH"
     from_port        = 22
     to_port          = 22
     protocol         = "tcp"
-    cidr_blocks      = [var.ip]
+    cidr_blocks      = ["0.0.0.0/0"]
   }
 
   egress {
@@ -80,7 +80,7 @@ resource "aws_security_group" "bastionado_sg" {
 
 resource "aws_security_group" "sg_ldap_instancia" {
   name   = "ldap_sg"
-  vpc_id = aws_vpc.vpc_1.id
+  vpc_id = aws_vpc.vpc_2.id
 
   ingress {
     description      = "Allow SSH"
@@ -129,18 +129,30 @@ output "ip_bastionado"{
   description = "IP Bastionado"
 }
 
+output "ip_ldap"{
+  value = aws_instance.ldap_instancia.private_ip
+  description = "IP LDAP"
+}
+
+
 # Asociar IP Elastica
 resource "aws_eip_association" "asociar_ip_elastica" {
   instance_id   = aws_instance.ftp_instancia.id
   allocation_id = aws_eip.ip_elastica_ftp.id
 }
 
+resource "aws_key_pair" "inst_key" {
+  key_name   = "inst_key"
+  public_key = var.public_key 
+}
+
 # Instancia Bastionado
 resource "aws_instance" "bastion_instancia" {
   ami                    = "ami-064519b8c76274859"
   instance_type          = "t2.micro"
-  subnet_id              = aws_subnet.public_subnet_vpc_1.id
-  key_name               = "Terraform"
+  subnet_id              = aws_subnet.public_subnet_vpc_2.id
+  #key_name               = "terra"
+  key_name               = aws_key_pair.inst_key.key_name
   associate_public_ip_address = true
   vpc_security_group_ids = [aws_security_group.bastionado_sg.id]
 
@@ -155,16 +167,20 @@ apt update -y
 }
 
 
+
 # Instancia para la subnet 1
 resource "aws_instance" "ftp_instancia" {
   ami           = "ami-064519b8c76274859" # Debian 12
   instance_type = "t2.micro"
   subnet_id     = aws_subnet.public_subnet_vpc_1.id
-  key_name      = "Terraform"
+  key_name               = aws_key_pair.inst_key.key_name
+  depends_on = [ aws_instance.ldap_instancia ]
   
   vpc_security_group_ids = [aws_security_group.sg_ftp_instancia.id]
   user_data = <<-EOF
 #!/bin/bash
+sleep 50
+
 apt update -y
 apt install vim -y
 # DOCKER
@@ -177,7 +193,7 @@ echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
   $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
   tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt update
+apt update -y
 apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-compose -y
 apt install jq -y
 
@@ -206,7 +222,12 @@ cat <<-DOCKERFILE > dockerfile
 FROM debian:12
 
 RUN apt update && \
-    apt install proftpd-core openssl proftpd-mod-crypto -y
+    apt install nano proftpd-core openssl proftpd-mod-crypto proftpd-mod-ldap ldap-utils -y
+
+RUN useradd -m -s /bin/bash usuario && echo "usuario:usuario" | chpasswd
+RUN useradd -m -s /bin/bash ${var.ftp_user} && echo "${var.ftp_user}:${var.ftp_password}" | chpasswd
+
+RUN mkdir -p /home/daniel/ftp && chown -R daniel:daniel /home/daniel && chmod -R 777 /home/daniel && chmod -R 777 /home/
 
 RUN echo "PassivePorts 1024 1048" >> /etc/proftpd/proftpd.conf && \
     echo "MasqueradeAddress $(curl -s https://api.myip.com | jq -r '.ip')" >> /etc/proftpd/proftpd.conf && \
@@ -215,7 +236,9 @@ RUN echo "PassivePorts 1024 1048" >> /etc/proftpd/proftpd.conf && \
 RUN sed -i '/<IfModule mod_quotatab.c>/,/<\/IfModule>/d' /etc/proftpd/proftpd.conf
 
 # Configuración de cuotas
+RUN echo "Include /etc/proftpd/ldap.conf" >> /etc/proftpd/modules.conf
 RUN echo "LoadModule mod_quotatab.c" >> /etc/proftpd/modules.conf && \
+    echo "LoadModule mod_ldap.c" >> /etc/proftpd/modules.conf && \
     echo "LoadModule mod_quotatab_file.c" >> /etc/proftpd/modules.conf && \
     echo "<IfModule mod_quotatab.c>" >> /etc/proftpd/proftpd.conf && \
     echo "  QuotaEngine on" >> /etc/proftpd/proftpd.conf && \
@@ -231,7 +254,7 @@ RUN cd /etc/proftpd && \
     ftpquota --create-table --type=limit --table-path=/etc/proftpd/ftpquota.limittab && \
     ftpquota --create-table --type=tally --table-path=/etc/proftpd/ftpquota.tallytab
 
-RUN cd /etc/proftpd/ && ftpquota --add-record --type=limit --name=daniel --quota-type=user --bytes-upload=1 --bytes-download=400 --units=Mb --files-upload=1 --files-download=50 --table-path=/etc/proftpd/ftpquota.limittab
+RUN cd /etc/proftpd/ && ftpquota --add-record --type=limit --name=daniel --quota-type=user --bytes-upload=100 --bytes-download=400 --units=Mb --files-upload=1 --files-download=50 --table-path=/etc/proftpd/ftpquota.limittab
 RUN cd /etc/proftpd/ && ftpquota --add-record --type=tally --name=daniel --quota-type=user
 
 # certificado TLS autofirmado
@@ -241,7 +264,7 @@ RUN mkdir -p /etc/proftpd/ssl && \
 
 # Configuración TLS
 RUN echo "LoadModule mod_tls.c" >> /etc/proftpd/modules.conf && \
-    echo "DefaultRoot ~" >> /etc/proftpd/proftpd.conf && \
+    echo "DefaultRoot /home/daniel/ftp" >> /etc/proftpd/proftpd.conf && \
     echo "Include /etc/proftpd/tls.conf" >> /etc/proftpd/proftpd.conf && \
     echo "<IfModule mod_tls.c>" >> /etc/proftpd/tls.conf && \
     echo "  TLSEngine on" >> /etc/proftpd/tls.conf && \
@@ -251,14 +274,33 @@ RUN echo "LoadModule mod_tls.c" >> /etc/proftpd/modules.conf && \
     echo "  TLSRSACertificateKeyFile /etc/ssl/private/proftpd.key" >> /etc/proftpd/tls.conf && \
     echo "</IfModule>" >> /etc/proftpd/tls.conf
 
-# Creación de usuario FTP
-RUN useradd -m -s /bin/bash ${var.ftp_user} && echo "${var.ftp_user}:${var.ftp_password}" | chpasswd
+RUN echo "<IfModule mod_ldap.c>" >> /etc/proftpd/ldap.conf && \
+    echo "  LDAPLog /var/log/proftpd/ldap.log" >> /etc/proftpd/ldap.conf && \
+    echo "  LDAPAuthBinds on" >> /etc/proftpd/ldap.conf && \
+    echo "  LDAPServer \"ldap://${aws_instance.ldap_instancia.private_ip}\"" >> /etc/proftpd/ldap.conf && \
+    echo "  LDAPBindDN \"cn=admin,dc=daniel,dc=com\" \"bindpw\"" >> /etc/proftpd/ldap.conf && \
+    echo "  LDAPUsers \"ou=ldap,dc=daniel,dc=com\" \"(uid=%u)\"" >> /etc/proftpd/ldap.conf && \
+    echo "  CreateHome on 755" >> /etc/proftpd/ldap.conf && \
+    echo "  LDAPGenerateHomedir on 755" >> /etc/proftpd/ldap.conf && \
+    echo "  LDAPForceGeneratedHomedir on 755" >> /etc/proftpd/ldap.conf && \
+    echo "  LDAPGenerateHomedirPrefix /home" >> /etc/proftpd/ldap.conf && \
+    echo "</IfModule>" >> /etc/proftpd/ldap.conf
+
+RUN echo "<IfModule mod_ldap.c>" >> /etc/proftpd/proftpd.conf && \
+    echo "    LDAPLog /var/log/proftpd/ldap.log" >> /etc/proftpd/proftpd.conf && \
+    echo "    LDAPAuthBinds on" >> /etc/proftpd/proftpd.conf && \
+    echo "    LDAPServer \"ldap://${aws_instance.ldap_instancia.private_ip}:389\"" >> /etc/proftpd/proftpd.conf && \
+    echo "    LDAPBindDN \"cn=admin,dc=daniel,dc=com\" \"daniel\"" >> /etc/proftpd/proftpd.conf && \
+    echo "    LDAPUsers \"dc=daniel,dc=com\" \"(uid=%u)\"" >> /etc/proftpd/proftpd.conf && \
+    echo "</IfModule>" >> /etc/proftpd/proftpd.conf
+
+
 RUN mkdir /home/${var.ftp_user}/s3
 RUN chown -R ${var.ftp_user}:${var.ftp_user} /home/${var.ftp_user}/s3
 RUN chmod 755 -R /home/${var.ftp_user}/s3
 
 EXPOSE 20 21 990 1024-1048
-CMD ["/usr/sbin/proftpd", "--nodaemon"]
+CMD ["sh", "-c", "chmod -R 777 /home/daniel/ftp && proftpd --nodaemon"]
 DOCKERFILE
 
 docker build -t mi_proftpd /home/admin/ftp-docker
@@ -276,70 +318,81 @@ chmod 700 /home/admin/ftp-docker
 resource "aws_instance" "ldap_instancia" {
   ami                    = "ami-064519b8c76274859"
   instance_type          = "t2.micro"
-  subnet_id              = aws_subnet.public_subnet_vpc_1.id
-  key_name               = "Terraform"
-  associate_public_ip_address = true
+  subnet_id              = aws_subnet.private_subnet_vpc_2.id
+  key_name               = aws_key_pair.inst_key.key_name
   vpc_security_group_ids = [aws_security_group.sg_ldap_instancia.id]
+  depends_on = [aws_nat_gateway.vpc2_nat_gateway]
 
 user_data = <<-EOF
 #!/bin/bash
+sleep 100
 apt update -y
-apt install vim -y
-# DOCKER
-apt install ca-certificates curl -y
+apt install vim ca-certificates curl -y
+
+# Instala Docker
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
 chmod a+r /etc/apt/keyrings/docker.asc
 
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  tee /etc/apt/sources.list.d/docker.list > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt update
 apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-compose -y
 
-# Crea y ejecuta el contenedor LDAP
+mkdir -p /home/admin
+
+cat <<'LDIF' > /tmp/add_users.ldif
+dn: ou=ldap,dc=daniel,dc=com
+objectClass: top
+objectClass: organizationalUnit
+ou: ldap
+
+dn: uid=alejandro,ou=ldap,dc=daniel,dc=com
+objectClass: inetOrgPerson
+objectClass: posixAccount
+cn: alejandro
+sn: Cortes
+uid: alejandro
+mail: alejandro@g.educaand.com
+uidNumber: 1001
+gidNumber: 1001
+homeDirectory: /home/ftp/
+loginShell: /bin/bash
+userPassword: alejandro
+
+dn: uid=carlos,ou=ldap,dc=daniel,dc=com
+objectClass: inetOrgPerson
+objectClass: posixAccount
+cn: carlos
+sn: Bullejos
+uid: carlos
+mail: carlos@g.educaand.com
+uidNumber: 1001
+gidNumber: 1001
+homeDirectory: /home/ftp/
+loginShell: /bin/bash
+userPassword: carlos
+LDIF
+
 docker run -d \
   --name openldap \
   --restart always \
   -p 389:389 -p 636:636 \
-  -e LDAP_ORGANISATION="Daniel S.L" \
+  -e LDAP_ORGANISATION="daniel" \
   -e LDAP_DOMAIN="daniel.com" \
   -e LDAP_ADMIN_PASSWORD="daniel" \
   -v /home/admin/ldap_data:/var/lib/ldap \
   -v /home/admin/ldap_config:/etc/ldap/slapd.d \
+  -v /tmp/add_users.ldif:/tmp/add_users.ldif \
   osixia/openldap:latest
 
-# Espera a que el contenedor esté listo
+# Opcional: Espera para asegurar que el contenedor se inicie completamente
 sleep 30
 
-# Crea un archivo LDIF con usuarios
-cat <<'LDIF' > /home/admin/add_users.ldif
-dn: ou=people,dc=daniel,dc=com
-objectClass: organizationalUnit
-ou: people
-
-dn: uid=usuario1,ou=people,dc=daniel,dc=com
-objectClass: inetOrgPerson
-cn: Usuario1
-sn: Apellido1
-uid: usuario1
-mail: usuario1@daniel.com
-userPassword: usuario1
-
-dn: uid=usuario2,ou=people,dc=daniel,dc=com
-objectClass: inetOrgPerson
-cn: Usuario2
-sn: Apellido2
-uid: usuario2
-mail: usuario2@daniel.com
-userPassword: usuario2
-LDIF
-
-# Añade usuarios al servidor LDAP
-docker exec -i openldap ldapadd -x -D "cn=admin,dc=daniel,dc=com" -w daniel -f /home/admin/add_users.ldif
-
+docker exec -i openldap ldapadd -x -D "cn=admin,dc=daniel,dc=com" -w daniel -f /tmp/add_users.ldif
+docker exec openldap ldappasswd -x -D "cn=admin,dc=daniel,dc=com" -w daniel -s "carlos" "uid=carlos,ou=ldap,dc=daniel,dc=com"
+docker exec openldap ldappasswd -x -D "cn=admin,dc=daniel,dc=com" -w daniel -s "alejandro" "uid=alejandro,ou=ldap,dc=daniel,dc=com"
 EOF
+
 
 # PARA GENERAR LA PASS HASHEADA HAY QUE HACER LO SIGUIENTE
 

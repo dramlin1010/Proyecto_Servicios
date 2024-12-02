@@ -155,3 +155,43 @@ resource "aws_route_table_association" "private_subnet_association_vpc_2" {
   subnet_id      = aws_subnet.private_subnet_vpc_2.id
   route_table_id = aws_route_table.private_route_table_vpc_2.id
 }
+
+
+# Elastic IP para NAT Gateway
+resource "aws_eip" "nat_eip_vpc_2" {
+  domain = "vpc"
+  tags = {
+    Name = "NAT EIP VPC 2"
+  }
+}
+
+# NAT Gateway para VPC 2
+resource "aws_nat_gateway" "nat_gateway_vpc_2" {
+  allocation_id = aws_eip.nat_eip_vpc_2.id
+  #subnet_id     = aws_subnet.private_subnet_vpc_2.id
+  subnet_id     = aws_subnet.public_subnet_vpc_2.id
+
+  tags = {
+    Name = "NAT Gateway VPC 2"
+  }
+  depends_on = [aws_eip.nat_eip_vpc_2]
+}
+
+# Añadir ruta predeterminada a la tabla de enrutamiento privada de la VPC 2
+resource "aws_route" "private_route_vpc_2_to_nat" {
+  route_table_id         = aws_route_table.private_route_table_vpc_2.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.nat_gateway_vpc_2.id
+
+  depends_on = [aws_nat_gateway.nat_gateway_vpc_2]
+}
+
+
+resource "aws_eip" "vpc2_nat_eip" {
+  domain = "vpc"
+}
+
+resource "aws_nat_gateway" "vpc2_nat_gateway" {
+  allocation_id = aws_eip.vpc2_nat_eip.id
+  subnet_id     = aws_subnet.public_subnet_vpc_2.id
+}
