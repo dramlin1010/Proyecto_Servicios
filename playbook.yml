@@ -6,7 +6,8 @@
       vars:
         cert_source: "certs/server.cert"
         key_source: "certs/server.key"
-    
+        cert_dest: "/etc/nginx/certs/server.cert"
+        key_dest: "/etc/nginx/certs/server.key"
       tasks:
         - name: Instalar dependencias
           apt:
