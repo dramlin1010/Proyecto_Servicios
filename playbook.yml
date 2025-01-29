@@ -1,0 +1,59 @@
+---
+    - name: Configurar Nginx con SSL en Docker
+      hosts: all
+      become: yes
+    
+      vars:
+        cert_source: "certs/server.cert"
+        key_source: "certs/server.key"
+    
+      tasks:
+        - name: Instalar dependencias
+          apt:
+            name:
+              - docker.io
+              - python3-pip
+              - nginx
+            state: present
+            update_cache: yes
+    
+        - name: Docker corriendo
+          service:
+            name: docker
+            state: started
+            enabled: yes
+    
+        - name: Crear directorio para certificados SSL
+          file:
+            path: /etc/nginx/certs
+            state: directory
+            mode: '0755'
+    
+        - name: Copiar certificado SSL al servidor
+          copy:
+            src: "{{ cert_source }}"
+            dest: "{{ cert_dest }}"
+            owner: root
+            group: root
+            mode: '0644'
+    
+        - name: Copiar clave privada SSL al servidor
+          copy:
+            src: "{{ key_source }}"
+            dest: "{{ key_dest }}"
+            owner: root
+            group: root
+            mode: '0600'
+    
+        - name: Configurar Nginx para usar SSL
+          template:
+            src: nginx_ssl.conf.j2
+            dest: /etc/nginx/conf.d/default.conf
+          notify: Reiniciar Nginx
+    
+      handlers:
+        - name: Reiniciar Nginx
+          service:
+            name: nginx
+            state: restarted
+    

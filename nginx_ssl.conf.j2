@@ -1,0 +1,22 @@
+server {
+    listen 80;
+    server_name localhost;
+
+    # Redirigir todo a HTTPS
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name localhost;
+
+    ssl_certificate {{ cert_dest }};
+    ssl_certificate_key {{ key_dest }};
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+}
