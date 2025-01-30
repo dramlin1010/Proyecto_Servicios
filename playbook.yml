@@ -1,60 +1,42 @@
 ---
-    - name: Configurar Nginx con SSL en Docker
-      hosts: all
-      become: yes
-    
-      vars:
-        cert_source: "certs/server.cert"
-        key_source: "certs/server.key"
-        cert_dest: "/etc/nginx/certs/server.cert"
-        key_dest: "/etc/nginx/certs/server.key"
-      tasks:
-        - name: Instalar dependencias
-          apt:
-            name:
-              - docker.io
-              - python3-pip
-              - nginx
-            state: present
-            update_cache: yes
-    
-        - name: Docker corriendo
-          service:
-            name: docker
-            state: started
-            enabled: yes
-    
-        - name: Crear directorio para certificados SSL
-          file:
-            path: /etc/nginx/certs
-            state: directory
-            mode: '0755'
-    
-        - name: Copiar certificado SSL al servidor
-          copy:
-            src: "{{ cert_source }}"
-            dest: "{{ cert_dest }}"
-            owner: root
-            group: root
-            mode: '0644'
-    
-        - name: Copiar clave privada SSL al servidor
-          copy:
-            src: "{{ key_source }}"
-            dest: "{{ key_dest }}"
-            owner: root
-            group: root
-            mode: '0600'
-    
-        - name: Configurar Nginx para usar SSL
-          template:
-            src: nginx_ssl.conf.j2
-            dest: /etc/nginx/conf.d/default.conf
-          notify: Reiniciar Nginx
-    
-      handlers:
-        - name: Reiniciar Nginx
-          service:
-            name: nginx
-            state: restarted
-    
+- name: Desplegar Nginx en Docker
+  hosts: ["192.168.52.2"]
+  become: yes
+  vars_files:
+    - nginx_vars.yml
+  tasks:
+    - name: Asegurar servicio Docker activo
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Ejecutar contenedor base
+      ansible.builtin.command:
+        cmd: >
+          docker run -d -it -p 443:443 -p 80:80
+          --name {{ container_name }}
+          -v /home/usuario/docker-web/nginx/certs:/etc/nginx/certs
+          -v /home/usuario/docker-web/nginx/conf.d:/etc/nginx/conf.d
+          rockylinux:9 /bin/bash
+
+    - name: Actualizar paquetes en el contenedor
+      ansible.builtin.command:
+        cmd: docker exec -it {{ container_name }} dnf update -y --setopt=sslverify=false
+
+    - name: Instalar NGINX en el contenedor
+      ansible.builtin.command:
+        cmd: docker exec -it {{ container_name }} dnf install nginx -y --setopt=sslverify=false
+
+    - name: Arrancando Nginx en el contenedor
+      ansible.builtin.command:
+        cmd: docker exec -it {{ container_name }} nginx
+
+    - name: Crear imagen desde contenedor
+      command: docker commit {{ container_name }} {{ dockerhub_repo }}:{{ docker_image_tag }}
+
+    - name: Autenticar en Docker Hub
+      command: docker login -u {{ dockerhub_user }} -p {{ dockerhub_pass }}
+
+    - name: Subir imagen a Docker Hub
+      command: docker push {{ dockerhub_repo }}:{{ docker_image_tag }}
