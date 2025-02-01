@@ -1,0 +1,70 @@
+---
+- name: Desplegar Nginx en Docker y enviar imagen a AWS ECR
+  hosts: ["192.168.52.2"]
+  become: yes
+  vars_files:
+    - nginx_vars_ecr.yml
+  tasks:
+    - name: Asegurar servicio Docker activo
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Ejecutar contenedor base
+      ansible.builtin.command:
+        cmd: >
+          docker run -d -it -p 443:443 -p 80:80
+          --name {{ container_name }}
+          -v /home/usuario/docker-web/nginx/certs:/etc/nginx/certs
+          -v /home/usuario/docker-web/nginx/conf.d:/etc/nginx/conf.d
+          -v /home/usuario/docker-web/nginx/html:/etc/nginx/html
+          rockylinux:9 /bin/bash
+
+    - name: Actualizar paquetes en el contenedor
+      ansible.builtin.command:
+        cmd: docker exec -it {{ container_name }} dnf update -y --setopt=sslverify=false
+
+    - name: Instalar NGINX en el contenedor
+      ansible.builtin.command:
+        cmd: docker exec -it {{ container_name }} dnf install nginx -y --setopt=sslverify=false
+
+    - name: Arrancando Nginx en el contenedor
+      ansible.builtin.command:
+        cmd: docker exec -it {{ container_name }} nginx
+
+    - name: Crear imagen desde contenedor
+      command: docker commit {{ container_name }} {{ ecr_repo }}:{{ docker_image_tag }}
+
+    
+    - name: Configurar credenciales de AWS
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_SESSION_TOKEN: "{{ aws_session_token }}"
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
+      command: /usr/local/bin/aws sts get-caller-identity  # Verificar credenciales
+
+    - name: Instalar AWS CLI (si no esta instalado)
+      command: >
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" &&
+        unzip awscliv2.zip &&
+        sudo ./aws/install
+      args:
+        creates: /usr/local/bin/aws  # Evita reinstalar si ya esta instalado
+
+    - name: Autenticar en AWS ECR
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_SESSION_TOKEN: "{{ aws_session_token }}"
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
+      shell: >
+        /usr/local/bin/aws ecr get-login-password --region {{ aws_region }} |
+        docker login --username AWS --password-stdin {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com
+  
+    - name: Etiquetar imagen para AWS ECR
+      command: docker tag {{ ecr_repo }}:{{ docker_image_tag }} {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ ecr_repo }}:{{ docker_image_tag }}
+
+    - name: Subir imagen a AWS ECR
+      command: docker push {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ ecr_repo }}:{{ docker_image_tag }}

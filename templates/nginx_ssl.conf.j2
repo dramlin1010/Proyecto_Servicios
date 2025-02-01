@@ -1,22 +1,41 @@
+map $http_accept_language $lang {
+    default en;
+    ~*^es es;
+    ~*^en en;
+}
+
 server {
     listen 80;
     server_name localhost;
 
     # Redirigir todo a HTTPS
-    return 301 https://\$host\$request_uri;
+    return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl;
     server_name localhost;
 
-    ssl_certificate {{ cert_dest }};
-    ssl_certificate_key {{ key_dest }};
+    ssl_certificate /etc/nginx/certs/cert.pem;
+    ssl_certificate_key /etc/nginx/certs/key.pem;
 
-    root /usr/share/nginx/html;
+    root /etc/nginx/html;
     index index.html;
 
+    # Negociación de contenidos
     location / {
-        try_files \$uri \$uri/ =404;
+        try_files /$lang/$uri /$lang/$uri/ /$lang/index.html =404;
+    }
+
+    # Páginas de errores personalizadas
+    error_page 404 /$lang/404.html;
+    error_page 500 502 503 504 /$lang/50x.html;
+
+    location = /$lang/404.html {
+        internal;
+    }
+
+    location = /$lang/50x.html {
+        internal;
     }
 }
