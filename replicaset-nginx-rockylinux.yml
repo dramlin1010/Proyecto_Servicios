@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: replicaset-nginx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      imagePullSecrets:
+      - name: ecr-secret
+      containers:
+      - name: nginx
+        image: 887465598388.dkr.ecr.us-east-1.amazonaws.com/nginx-rockylinux:latest
+        imagePullPolicy: Always
