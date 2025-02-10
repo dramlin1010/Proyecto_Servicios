@@ -10,8 +10,13 @@
         state: started
         enabled: yes
 
+    - name: Renderizar configuración de Nginx
+      template:
+        src: "{{ nginx_conf_template }}"
+        dest: "/home/usuario/docker-web/nginx/conf.d/default.conf"
+
     - name: Construir imagen de Docker manualmente
-      command: docker build -t {{ container_name }}:{{ docker_image_tag }} /home/usuario/docker-web/nginx
+      command: docker build -t {{ ecr_repo }}:{{ docker_image_tag }} /home/usuario/docker-web/nginx
     
     - name: Configurar credenciales de AWS
       environment:
