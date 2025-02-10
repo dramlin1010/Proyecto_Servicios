@@ -1,14 +1,12 @@
 map $http_accept_language $lang {
     default en;
-    ~*^es es;
-    ~*^en en;
+    ~*es    es;
+    ~*en    en;
 }
 
 server {
     listen 80;
     server_name localhost;
-
-    # Redirigir todo a HTTPS
     return 301 https://$host$request_uri;
 }
 
@@ -22,12 +20,37 @@ server {
     root /etc/nginx/html;
     index index.html;
 
-    # Negociación de contenidos
-    location / {
-        try_files /$lang/$uri /$lang/$uri/ /$lang/index.html =404;
+    # Autenticación básica para /users/
+    location /users/ {
+        auth_basic "Restricted Access";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        rewrite ^/users/$ /users/$remote_user/ redirect;
     }
 
-    # Páginas de errores personalizadas
+    # Mapear /users/<usuario>
+    location ~ ^/users/([^/]+)(/.*)?$ {
+        alias /home/$1/public_html$2;
+        autoindex on;
+        index index.html index.htm;
+    }
+
+    # Sitios virtuales
+    location /sitio1 {
+        alias /var/www/sitio1/;
+        try_files $uri $uri/ =404;
+    }
+
+    location /sitio2 {
+        alias /var/www/sitio2/;
+        try_files $uri $uri/ =404;
+    }
+
+    # Contenidos según idioma
+    location / {
+        try_files /$lang/$uri /$lang/$uri/ $uri $uri/ =404;
+    }
+
+    # Manejo de errores
     error_page 404 /$lang/404.html;
     error_page 500 502 503 504 /$lang/50x.html;
 
