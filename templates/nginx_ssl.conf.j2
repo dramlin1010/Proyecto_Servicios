@@ -7,57 +7,65 @@ map $http_accept_language $lang {
 server {
     listen 80;
     server_name localhost;
-    return 301 https://$host$request_uri;
+    
+    return 301 https://$host:32000$request_uri;
 }
 
 server {
-    listen 443 ssl;
+    listen 32000 ssl;
     server_name localhost;
-
-    ssl_certificate /etc/nginx/certs/cert.pem;
+    
+    ssl_certificate     /etc/nginx/certs/cert.pem;
     ssl_certificate_key /etc/nginx/certs/key.pem;
-
-    root /etc/nginx/html;
+    
+    root  /etc/nginx/html;
     index index.html;
-
-    # Autenticación básica para /users/
-    location /users/ {
-        auth_basic "Restricted Access";
+    
+    location = /users/ {
+        auth_basic           "Restricted Access";
         auth_basic_user_file /etc/nginx/.htpasswd;
-        rewrite ^/users/$ /users/$remote_user/ redirect;
+        return 301 https://$host:32000/users/$remote_user/;
     }
-
-    # Mapear /users/<usuario>
-    location ~ ^/users/([^/]+)(/.*)?$ {
-        alias /home/$1/public_html$2;
+    
+    location ~ ^/users/([^/]+)$ {
+        return 301 https://$host:32000/users/$1/;
+    }
+    
+    location ~ ^/users/(?<username>[^/]+)(?<rest>/.*)$ {
+        auth_basic           "Restricted Access";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        
+        alias /home/$username/public_html$rest;
         autoindex on;
         index index.html index.htm;
     }
-
-    # Sitios virtuales
+    
+    location ~ ^/(en|es)$ {
+        return 301 https://$host:32000/$1/;
+    }
+        
+    location / {
+        # Se buscan los ficheros primero en /<idioma>/..., luego en la raíz
+        try_files /$lang/$uri /$lang/$uri/ $uri $uri/ =404;
+    }
+        
     location /sitio1 {
         alias /var/www/sitio1/;
         try_files $uri $uri/ =404;
     }
-
+    
     location /sitio2 {
         alias /var/www/sitio2/;
         try_files $uri $uri/ =404;
     }
-
-    # Contenidos según idioma
-    location / {
-        try_files /$lang/$uri /$lang/$uri/ $uri $uri/ =404;
-    }
-
-    # Manejo de errores
+        
     error_page 404 /$lang/404.html;
     error_page 500 502 503 504 /$lang/50x.html;
-
+    
     location = /$lang/404.html {
         internal;
     }
-
+    
     location = /$lang/50x.html {
         internal;
     }
