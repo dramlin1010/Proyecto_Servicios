@@ -27,8 +27,8 @@ resource "aws_security_group" "sg_ftp_instancia" {
 
   # Puertos Pasivo
   ingress {
-    from_port   = 1024
-    to_port     = 1048
+    from_port   = 1100
+    to_port     = 1101
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -208,105 +208,124 @@ aws_secret_access_key=${var.aws_secret_access_key}
 aws_session_token=${var.aws_session_token}
 CREDENTIALS
 
+apt install cron -y
+apt install rsync -y
 
-mkdir /home/admin/bucket-s3
-chmod -R 755 /home/admin/bucket-s3
-s3fs s3-test-daniel-bucket-lol /home/admin/bucket-s3 -o allow_other
+mkdir -p /home/admin/ftp
 
-# FTP DOCKER
-mkdir /home/admin/ftp-docker
-cd /home/admin/ftp-docker
+mkdir /mnt/bucket-s3
+chmod 777 /mnt/bucket-s3
+systemctl enable cron
+
+systemctl start cron
+systemctl enable cron
+
+(crontab -l 2>/dev/null; echo "* * * * * rsync -av /home/admin/ftp/ /mnt/bucket-s3/") | crontab -
+
+s3fs s3-test-daniel-bucket-lol /mnt/bucket-s3 -o allow_other
+
+mkdir -p /home/docker
+cd /home/docker
 
 # Crear Dockerfile
 cat <<-DOCKERFILE > dockerfile
-FROM debian:12
+FROM debian:latest
 
-RUN apt update && \
-    apt install nano proftpd-core openssl proftpd-mod-crypto proftpd-mod-ldap ldap-utils -y
+# Dependencias
+RUN apt-get update && apt-get install -y proftpd openssl nano proftpd-mod-crypto proftpd-mod-ldap ldap-utils
 
-RUN useradd -m -s /bin/bash usuario && echo "usuario:usuario" | chpasswd
+# Modulo de Crypto
+RUN apt-get update && apt-get install -y proftpd-mod-crypto && apt-get install proftpd-mod-ldap -y
+
 RUN useradd -m -s /bin/bash ${var.ftp_user} && echo "${var.ftp_user}:${var.ftp_password}" | chpasswd
 
-RUN mkdir -p /home/daniel/ftp && chown -R daniel:daniel /home/daniel && chmod -R 777 /home/daniel && chmod -R 777 /home/
+RUN mkdir -p /home/admin/ftp && chown -R ${var.ftp_user}:${var.ftp_user} /home/admin && chmod -R 777 /home/admin && chmod -R 777 /home/
 
-RUN echo "PassivePorts 1024 1048" >> /etc/proftpd/proftpd.conf && \
-    echo "MasqueradeAddress $(curl -s https://api.myip.com | jq -r '.ip')" >> /etc/proftpd/proftpd.conf && \
-    echo "UseIPv6 off" >> /etc/proftpd/proftpd.conf
+# Certificado ProFTPD
+RUN openssl req -x509 -newkey rsa:2048 -sha256 -keyout /etc/ssl/private/proftpd.key -out /etc/ssl/certs/proftpd.crt -nodes -days 365 \
+    -subj "/C=ES/ST=España/L=Granada/O=daniel/OU=daniel/CN=ftp.daniel.com"
 
 RUN sed -i '/<IfModule mod_quotatab.c>/,/<\/IfModule>/d' /etc/proftpd/proftpd.conf
 
-# Configuración de cuotas
-RUN echo "Include /etc/proftpd/ldap.conf" >> /etc/proftpd/modules.conf
-RUN echo "LoadModule mod_quotatab.c" >> /etc/proftpd/modules.conf && \
+RUN echo "DefaultRoot /home/admin/ftp" >> /etc/proftpd/proftpd.conf && \
+    echo "Include /etc/proftpd/modules.conf" >> /etc/proftpd/proftpd.conf && \
     echo "LoadModule mod_ldap.c" >> /etc/proftpd/modules.conf && \
-    echo "LoadModule mod_quotatab_file.c" >> /etc/proftpd/modules.conf && \
-    echo "<IfModule mod_quotatab.c>" >> /etc/proftpd/proftpd.conf && \
-    echo "  QuotaEngine on" >> /etc/proftpd/proftpd.conf && \
-    echo "  QuotaLog /var/log/proftpd/quota.log" >> /etc/proftpd/proftpd.conf && \
-    echo "</IfModule>" >> /etc/proftpd/proftpd.conf && \
-    echo "<IfModule mod_quotatab_file.c>" >> /etc/proftpd/proftpd.conf && \
-    echo "  QuotaLimitTable file:/etc/proftpd/ftpquota.limittab" >> /etc/proftpd/proftpd.conf && \
-    echo "  QuotaTallyTable file:/etc/proftpd/ftpquota.tallytab" >> /etc/proftpd/proftpd.conf && \
-    echo "</IfModule>" >> /etc/proftpd/proftpd.conf && \
-    echo "Include /etc/proftpd/modules.conf" >> /etc/proftpd/proftpd.conf
-
-RUN cd /etc/proftpd && \
-    ftpquota --create-table --type=limit --table-path=/etc/proftpd/ftpquota.limittab && \
-    ftpquota --create-table --type=tally --table-path=/etc/proftpd/ftpquota.tallytab
-
-RUN cd /etc/proftpd/ && ftpquota --add-record --type=limit --name=daniel --quota-type=user --bytes-upload=100 --bytes-download=400 --units=Mb --files-upload=1 --files-download=50 --table-path=/etc/proftpd/ftpquota.limittab
-RUN cd /etc/proftpd/ && ftpquota --add-record --type=tally --name=daniel --quota-type=user
-
-# certificado TLS autofirmado
-RUN mkdir -p /etc/proftpd/ssl && \
-    openssl req -x509 -newkey rsa:2048 -sha256 -keyout /etc/ssl/private/proftpd.key -out /etc/ssl/certs/proftpd.crt -nodes -days 365 \
-    -subj "/C=ES/ST=España/L=Granada/O=daniel/OU=daniel/CN=ftp.daniel.com"
-
-# Configuración TLS
-RUN echo "LoadModule mod_tls.c" >> /etc/proftpd/modules.conf && \
-    echo "DefaultRoot /home/daniel/ftp" >> /etc/proftpd/proftpd.conf && \
+    echo "Include /etc/proftpd/ldap.conf" >> /etc/proftpd/proftpd.conf && \
     echo "Include /etc/proftpd/tls.conf" >> /etc/proftpd/proftpd.conf && \
+    echo "PassivePorts 1100 1101" >> /etc/proftpd/proftpd.conf && \
     echo "<IfModule mod_tls.c>" >> /etc/proftpd/tls.conf && \
     echo "  TLSEngine on" >> /etc/proftpd/tls.conf && \
     echo "  TLSLog /var/log/proftpd/tls.log" >> /etc/proftpd/tls.conf && \
     echo "  TLSProtocol SSLv23" >> /etc/proftpd/tls.conf && \
     echo "  TLSRSACertificateFile /etc/ssl/certs/proftpd.crt" >> /etc/proftpd/tls.conf && \
     echo "  TLSRSACertificateKeyFile /etc/ssl/private/proftpd.key" >> /etc/proftpd/tls.conf && \
-    echo "</IfModule>" >> /etc/proftpd/tls.conf
+    echo "</IfModule>" >> /etc/proftpd/tls.conf && \
+    echo "<Anonymous /home/admin/ftp>" >> /etc/proftpd/proftpd.conf && \
+    echo "  User ftp" >> /etc/proftpd/proftpd.conf && \
+    echo "  Group nogroup" >> /etc/proftpd/proftpd.conf && \
+    echo "  UserAlias anonymous ftp" >> /etc/proftpd/proftpd.conf && \
+    echo "  RequireValidShell off" >> /etc/proftpd/proftpd.conf && \
+    echo "  MaxClients 10" >> /etc/proftpd/proftpd.conf && \
+    echo "  <Directory *>" >> /etc/proftpd/proftpd.conf && \
+    echo "    <Limit WRITE>" >> /etc/proftpd/proftpd.conf && \
+    echo "      DenyAll" >> /etc/proftpd/proftpd.conf && \
+    echo "    </Limit>" >> /etc/proftpd/proftpd.conf && \
+    echo "  </Directory>" >> /etc/proftpd/proftpd.conf && \
+    echo "</Anonymous>" >> /etc/proftpd/proftpd.conf && \
+    echo " LoadModule mod_tls.c" >> /etc/proftpd/modules.conf
 
-RUN echo "<IfModule mod_ldap.c>" >> /etc/proftpd/ldap.conf && \
-    echo "  LDAPLog /var/log/proftpd/ldap.log" >> /etc/proftpd/ldap.conf && \
-    echo "  LDAPAuthBinds on" >> /etc/proftpd/ldap.conf && \
-    echo "  LDAPServer \"ldap://${aws_instance.ldap_instancia.private_ip}\"" >> /etc/proftpd/ldap.conf && \
-    echo "  LDAPBindDN \"cn=admin,dc=daniel,dc=com\" \"bindpw\"" >> /etc/proftpd/ldap.conf && \
-    echo "  LDAPUsers \"ou=ldap,dc=daniel,dc=com\" \"(uid=%u)\"" >> /etc/proftpd/ldap.conf && \
-    echo "  CreateHome on 755" >> /etc/proftpd/ldap.conf && \
-    echo "  LDAPGenerateHomedir on 755" >> /etc/proftpd/ldap.conf && \
-    echo "  LDAPForceGeneratedHomedir on 755" >> /etc/proftpd/ldap.conf && \
-    echo "  LDAPGenerateHomedirPrefix /home" >> /etc/proftpd/ldap.conf && \
-    echo "</IfModule>" >> /etc/proftpd/ldap.conf
-
-RUN echo "<IfModule mod_ldap.c>" >> /etc/proftpd/proftpd.conf && \
-    echo "    LDAPLog /var/log/proftpd/ldap.log" >> /etc/proftpd/proftpd.conf && \
-    echo "    LDAPAuthBinds on" >> /etc/proftpd/proftpd.conf && \
-    echo "    LDAPServer \"ldap://${aws_instance.ldap_instancia.private_ip}:389\"" >> /etc/proftpd/proftpd.conf && \
-    echo "    LDAPBindDN \"cn=admin,dc=daniel,dc=com\" \"daniel\"" >> /etc/proftpd/proftpd.conf && \
-    echo "    LDAPUsers \"dc=daniel,dc=com\" \"(uid=%u)\"" >> /etc/proftpd/proftpd.conf && \
+# Cuotas
+RUN echo "<IfModule mod_quotatab.c>" >> /etc/proftpd/proftpd.conf && \
+    echo "QuotaEngine on" >> /etc/proftpd/proftpd.conf && \
+    echo "QuotaLog /var/log/proftpd/quota.log" >> /etc/proftpd/proftpd.conf && \
+    echo "<IfModule mod_quotatab_file.c>" >> /etc/proftpd/proftpd.conf && \
+    echo "     QuotaLimitTable file:/etc/proftpd/ftpquota.limittab" >> /etc/proftpd/proftpd.conf && \
+    echo "     QuotaTallyTable file:/etc/proftpd/ftpquota.tallytab" >> /etc/proftpd/proftpd.conf && \
+    echo "</IfModule>" >> /etc/proftpd/proftpd.conf && \
     echo "</IfModule>" >> /etc/proftpd/proftpd.conf
 
 
-RUN mkdir /home/${var.ftp_user}/s3
-RUN chown -R ${var.ftp_user}:${var.ftp_user} /home/${var.ftp_user}/s3
-RUN chmod 755 -R /home/${var.ftp_user}/s3
+# Tablas y Registros
 
-EXPOSE 20 21 990 1024-1048
-CMD ["sh", "-c", "chmod -R 777 /home/daniel/ftp && proftpd --nodaemon"]
+RUN cd /etc/proftpd
+RUN cd /etc/proftpd && ftpquota --create-table --type=limit --table-path=/etc/proftpd/ftpquota.limittab && \
+    ftpquota --create-table --type=tally --table-path=/etc/proftpd/ftpquota.tallytab && \
+    ftpquota --add-record --type=limit --name=daniel --quota-type=user --bytes-upload=20 --bytes-download=400 --units=Mb --files-upload=15 --files-download=50 --table-path=/etc/proftpd/ftpquota.limittab && \
+    ftpquota --add-record --type=tally --name=daniel --quota-type=user
+
+# LDAP Config en /etc/proftpd/proftpd.conf
+RUN echo "<IfModule mod_ldap.c>" >> /etc/proftpd/proftpd.conf && \
+    echo "    LDAPLog /var/log/proftpd/ldap.log" >> /etc/proftpd/proftpd.conf && \
+    echo "    LDAPAuthBinds on" >> /etc/proftpd/proftpd.conf && \
+    echo "    LDAPServer ldap://${aws_instance.ldap_instancia.private_ip}:389" >> /etc/proftpd/proftpd.conf && \
+    echo "    LDAPBindDN \"cn=admin,dc=danielftp,dc=com\" \"admin_password\"" >> /etc/proftpd/proftpd.conf && \
+    echo "    LDAPUsers \"dc=danielftp,dc=com\" \"(uid=%u)\"" >> /etc/proftpd/proftpd.conf && \
+    echo "</IfModule>" >> /etc/proftpd/proftpd.conf
+
+#LDAP Config en /etc/proftpd/ldap.conf
+RUN echo "<IfModule mod_ldap.c>" >> /etc/proftpd/ldap.conf && \
+    echo "    # Dirección del servidor LDAP" >> /etc/proftpd/ldap.conf && \
+    echo "    LDAPServer ${aws_instance.ldap_instancia.private_ip}" >> /etc/proftpd/ldap.conf && \
+    echo "    LDAPBindDN \"cn=admin,dc=danielftp,dc=com\" \"admin_password\"" >> /etc/proftpd/ldap.conf && \
+    echo "    LDAPUsers ou=users,dc=danielftp,dc=com (uid=%u)" >> /etc/proftpd/ldap.conf && \
+    echo "    CreateHome on 755" >> /etc/proftpd/ldap.conf && \
+    echo "    LDAPGenerateHomedir on 755" >> /etc/proftpd/ldap.conf && \
+    echo "    LDAPForceGeneratedHomedir on 755" >> /etc/proftpd/ldap.conf && \
+    echo "    LDAPGenerateHomedirPrefix /home" >> /etc/proftpd/ldap.conf && \
+    echo "</IfModule>" >> /etc/proftpd/ldap.conf
+
+RUN echo "<Directory /home/admin/ftp>" >> /etc/proftpd/proftpd.conf && \
+    echo "<Limit WRITE>" >> /etc/proftpd/proftpd.conf && \
+    echo "  DenyUser carlos" >> /etc/proftpd/proftpd.conf && \
+    echo "</Limit>" >> /etc/proftpd/proftpd.conf && \
+    echo "</Directory>" >> /etc/proftpd/proftpd.conf 
+
+EXPOSE 20 21 990 1100 1101
+CMD ["sh", "-c", "chmod -R 777 /home/admin/ftp && proftpd --nodaemon"]
 DOCKERFILE
 
-docker build -t mi_proftpd /home/admin/ftp-docker
-docker run -d  --name proftpd_server -v /home/admin/bucket-s3:/home/daniel/s3 -p 21:21 -p 20:20 -p 990:990 -p 1024-1048:1024-1048 mi_proftpd
-chown admin:admin /home/admin/ftp-docker
-chmod 700 /home/admin/ftp-docker
+docker build -t mi_proftpd .
+docker run -d --name proftpd_server -p 20:20 -p 21:21 -p 990:990 -p 1100:1100 -p 1101:1101 -v /home/admin/ftp:/home/admin/ftp mi_proftpd
               EOF
 
   
@@ -325,74 +344,78 @@ resource "aws_instance" "ldap_instancia" {
 
 user_data = <<-EOF
 #!/bin/bash
-sleep 100
-apt update -y
-apt install vim ca-certificates curl -y
+sleep 30
+apt-get update -y
+apt-get install -y docker.io
+systemctl start docker
+systemctl enable docker
 
-# Instala Docker
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-chmod a+r /etc/apt/keyrings/docker.asc
+mkdir -p /home/admin/ldap
 
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt update
-apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-compose -y
+cat <<-EOT > /home/admin/ldap/Dockerfile
 
-mkdir -p /home/admin
+FROM osixia/openldap:1.5.0
 
-cat <<'LDIF' > /tmp/add_users.ldif
-dn: ou=ldap,dc=daniel,dc=com
+# Variables de entorno
+ENV LDAP_ORGANISATION="Daniel FTP"
+ENV LDAP_DOMAIN="danielftp.com"
+ENV LDAP_ADMIN_PASSWORD="admin_password"
+
+EOT
+
+cat <<-BOOT > /home/admin/ldap/bootstrap.ldif
+# Unidad organizativa para usuarios
+dn: ou=users,dc=danielftp,dc=com
 objectClass: top
 objectClass: organizationalUnit
-ou: ldap
+ou: users
 
-dn: uid=alejandro,ou=ldap,dc=daniel,dc=com
-objectClass: inetOrgPerson
-objectClass: posixAccount
-cn: alejandro
-sn: Cortes
-uid: alejandro
-mail: alejandro@g.educaand.com
-uidNumber: 1001
-gidNumber: 1001
-homeDirectory: /home/ftp/
-loginShell: /bin/bash
-userPassword: alejandro
-
-dn: uid=carlos,ou=ldap,dc=daniel,dc=com
+# Usuario: Carlos
+dn: uid=carlos,ou=users,dc=danielftp,dc=com
 objectClass: inetOrgPerson
 objectClass: posixAccount
 cn: carlos
 sn: Bullejos
 uid: carlos
-mail: carlos@g.educaand.com
+mail: carlos@danielftp.com
+userPassword: carlos
 uidNumber: 1001
 gidNumber: 1001
 homeDirectory: /home/ftp/
 loginShell: /bin/bash
-userPassword: carlos
-LDIF
 
-docker run -d \
-  --name openldap \
-  --restart always \
-  -p 389:389 -p 636:636 \
-  -e LDAP_ORGANISATION="daniel" \
-  -e LDAP_DOMAIN="daniel.com" \
-  -e LDAP_ADMIN_PASSWORD="daniel" \
-  -v /home/admin/ldap_data:/var/lib/ldap \
-  -v /home/admin/ldap_config:/etc/ldap/slapd.d \
-  -v /tmp/add_users.ldif:/tmp/add_users.ldif \
-  osixia/openldap:latest
+# Usuario: Alejandro
+dn: uid=alejandro,ou=users,dc=danielftp,dc=com
+objectClass: inetOrgPerson
+objectClass: posixAccount
+cn: alejandro
+sn: Cortes
+uid: alejandro
+mail: alejandro@danielftp.com
+userPassword: alejandro
+uidNumber: 1002
+gidNumber: 1002
+homeDirectory: /home/ftp/
+loginShell: /bin/bash
 
-# Opcional: Espera para asegurar que el contenedor se inicie completamente
-sleep 30
+BOOT
 
-docker exec -i openldap ldapadd -x -D "cn=admin,dc=daniel,dc=com" -w daniel -f /tmp/add_users.ldif
-docker exec openldap ldappasswd -x -D "cn=admin,dc=daniel,dc=com" -w daniel -s "carlos" "uid=carlos,ou=ldap,dc=daniel,dc=com"
-docker exec openldap ldappasswd -x -D "cn=admin,dc=daniel,dc=com" -w daniel -s "alejandro" "uid=alejandro,ou=ldap,dc=daniel,dc=com"
+cd /home/admin/ldap
+docker build -t myldap .
+
+docker run -d -p 389:389 -p 636:636 --name ldap myldap --loglevel debug
+sleep 10
+
+docker cp bootstrap.ldif ldap:/tmp
+
+docker exec ldap ldapadd -x -D "cn=admin,dc=danielftp,dc=com" -w admin_password -f /tmp/bootstrap.ldif
+
+docker exec ldap ldappasswd -x -D "cn=admin,dc=danielftp,dc=com" -w admin_password -s "carlos" "uid=carlos,ou=users,dc=danielftp,dc=com"
+docker exec ldap ldappasswd -x -D "cn=admin,dc=danielftp,dc=com" -w admin_password -s "alejandro" "uid=alejandro,ou=users,dc=danielftp,dc=com"
+
+docker stop ldap
+docker start ldap
 EOF
-
 
 # PARA GENERAR LA PASS HASHEADA HAY QUE HACER LO SIGUIENTE
 
