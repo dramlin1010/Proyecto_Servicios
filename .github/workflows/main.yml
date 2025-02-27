@@ -13,6 +13,14 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Crear archivo terraform.tfvars
+        run: |
+          cat <<EOF >> terraform/terraform.tfvars
+          aws_access_key_id = "${{ secrets.AWS_ACCESS_KEY_ID }}"
+          aws_secret_access_key = "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          aws_session_token = "${{ secrets.AWS_SESSION_TOKEN }}"
+          EOF
+
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
 
