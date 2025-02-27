@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "my_bucket" {
-  bucket = "copias_router_daniel_ramirez_linares"
+  bucket = "copias-router-daniel-ramirez-linares"
 }
 
 resource "aws_s3_bucket_ownership_controls" "my_bucket_ownership" {

@@ -222,7 +222,7 @@ systemctl enable cron
 
 (crontab -l 2>/dev/null; echo "* * * * * rsync -av /home/admin/ftp/ /mnt/bucket-s3/") | crontab -
 
-s3fs s3-test-daniel-bucket-lol /mnt/bucket-s3 -o allow_other
+s3fs copias-router-daniel-ramirez-linares /mnt/bucket-s3 -o allow_other
 
 mkdir -p /home/docker
 cd /home/docker
