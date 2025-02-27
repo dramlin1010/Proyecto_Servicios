@@ -1,0 +1,50 @@
+name: Terraform AWS Deployment
+
+on:
+  push:
+    branches:
+      - VPC_Infra
+  workflow_dispatch:
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configurar Credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Init Terraform
+        run: terraform init
+        working-directory: terraform
+
+      - name: Apply Terraform
+        run: terraform apply -auto-approve -var "public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+        working-directory: terraform
+
+      - name: Upload Terraform State as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Terraform State
+          path: terraform/terraform.tfstate
+
+      - name: Subir archivo tfstate a S3
+        uses: a-sync/s3-uploader@master
+        with:
+          args: --acl public-read
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: 'us-east-1'
+          S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          FILE: terraform/terraform.tfstate
