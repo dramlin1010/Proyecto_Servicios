@@ -21,6 +21,14 @@ jobs:
       - name: Instalar terraform
         uses: hashicorp/setup-terraform@v3
 
+      - name: Crear archivo terraform.tfvars
+        run: |
+          cat <<EOF >> terraform/terraform.tfvars
+          aws_access_key_id = "${{ secrets.AWS_ACCESS_KEY_ID }}"
+          aws_secret_access_key = "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          aws_session_token = "${{ secrets.AWS_SESSION_TOKEN }}"
+          EOF
+
       - name: AWS Creds
         uses: aws-actions/configure-aws-credentials@v4
         with:
