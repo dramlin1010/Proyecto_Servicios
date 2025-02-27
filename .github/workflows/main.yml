@@ -31,7 +31,7 @@ jobs:
       - name: Apply Terraform
         run: terraform apply -auto-approve -var "public_key=${{ secrets.SSH_PUBLIC_KEY }}"
         working-directory: terraform
-       
+       # Todo aqui
       - name: Upload Terraform State as Artifact
         uses: actions/upload-artifact@v4
         with:
