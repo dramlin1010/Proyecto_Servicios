@@ -1,3 +1,4 @@
+# Configuracion de la pagina web hecha por nosotros.
 map $http_accept_language $lang {
     default en;
     ~*es    es;
@@ -15,8 +16,8 @@ server {
     listen 32000 ssl;
     server_name localhost;
     
-    ssl_certificate     /etc/nginx/certs/cert.pem;
-    ssl_certificate_key /etc/nginx/certs/key.pem;
+    ssl_certificate     {{ cert_dest }};
+    ssl_certificate_key {{ key_dest }};
     
     root  /etc/nginx/html;
     index index.html;

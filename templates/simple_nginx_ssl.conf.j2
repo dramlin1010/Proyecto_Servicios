@@ -1,0 +1,21 @@
+# Configuracion de la pagina web de charneco
+server {
+    listen 31000 ssl;
+    server_name localhost;
+
+    ssl_certificate {{ cert_dest }};
+    ssl_certificate_key {{ key_dest }};
+
+    root /etc/nginx/html;
+    index index.php index.html index.htm;
+
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_pass php-fpm-service:9000;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+    }
+
+    error_page 500 502 503 504 /50x.html;
+}

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ldap-pod
+spec:
+  containers:
+  - name: contenedor-ldap
+    image: osixia/openldap:latest
+    env:
+    - name: LDAP_ORGANISATION
+      value: "Daniel S.A"
+    - name: LDAP_DOMAIN
+      value: "daniel.com"
+    - name: LDAP_ADMIN_PASSWORD
+      value: "admin"
+    ports:
+    - containerPort: 389
+    - containerPort: 636
+  imagePullSecrets:
+  - name: ecr-secret
