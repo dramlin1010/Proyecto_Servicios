@@ -1,0 +1,45 @@
+- name: Desplegar Nginx en Docker y enviar imágenes a AWS ECR
+  hosts: rocky_server
+  become: yes
+  vars_files:
+    - nginx_vars_ecr.yml
+  tasks:
+    - name: Asegurar servicio Docker activo
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Construir imagen de Docker v1
+      command: docker build -t {{ container_name }}:v1 /home/usuario/docker-web/nginx-v1
+
+    - name: Construir imagen de Docker v2
+      command: docker build -t {{ container_name }}:v2 /home/usuario/docker-web/nginx-v2
+
+    - name: Configurar credenciales de AWS
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_SESSION_TOKEN: "{{ aws_session_token }}"
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
+      command: /usr/local/bin/aws sts get-caller-identity
+
+    - name: Autenticar en AWS ECR
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_SESSION_TOKEN: "{{ aws_session_token }}"
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
+      shell: >
+        /usr/local/bin/aws ecr get-login-password --region {{ aws_region }} |
+        docker login --username AWS --password-stdin {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com
+
+    - name: Etiquetar imágenes para AWS ECR
+      shell: >
+        docker tag {{ container_name }}:v1 {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ ecr_repo }}:v1 &&
+        docker tag {{ container_name }}:v2 {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ ecr_repo }}:v2
+
+    - name: Subir imágenes a AWS ECR
+      shell: >
+        docker push {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ ecr_repo }}:v1 &&
+        docker push {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ ecr_repo }}:v2
