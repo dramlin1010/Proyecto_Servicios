@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
   - name: contenedor-nginx-pvc
-    image: 887465598388.dkr.ecr.us-east-1.amazonaws.com/nginx-rockylinux:version_charneco
+    image: 887465598388.dkr.ecr.us-east-1.amazonaws.com/nginx-rockylinux:version_pagina
     imagePullPolicy: Always
     ports:
     - containerPort: 31000
