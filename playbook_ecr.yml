@@ -16,7 +16,7 @@
         dest: "/home/usuario/docker-web/nginx/conf.d/default.conf"
 
     - name: Construir imagen de Docker manualmente
-      command: docker build -t {{ ecr_repo }}:{{ docker_image_tag }} /home/usuario/docker-web/nginx
+      command: docker build --no-cache -t {{ ecr_repo }}:{{ docker_image_tag }} /home/usuario/docker-web/nginx
     
     - name: Configurar credenciales de AWS
       environment:
