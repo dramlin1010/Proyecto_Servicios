@@ -1,4 +1,3 @@
-# Configuracion de la pagina web hecha por nosotros.
 map $http_accept_language $lang {
     default en;
     ~*es    es;
@@ -44,9 +43,8 @@ server {
     location ~ ^/(en|es)$ {
         return 301 https://$host:32000/$1/;
     }
-        
+
     location / {
-        # Se buscan los ficheros primero en /<idioma>/..., luego en la raíz
         try_files /$lang/$uri /$lang/$uri/ $uri $uri/ =404;
     }
         
