@@ -28,7 +28,7 @@ jobs:
         run: kubectl apply -f eks_nodo/
 
       - name: Wait for resources to be ready
-        run: kubectl wait --for=condition=Ready pods --all --timeout=30s
+        run: kubectl wait --for=condition=Ready pods --all --timeout=60s
 
       - name: Show Kukernetes
         run: kubectl get all
