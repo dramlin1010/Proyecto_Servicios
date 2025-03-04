@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - Kubernetes
-    
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -24,11 +24,61 @@ jobs:
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name mieks --region us-east-1
 
-      - name: Apply Kubernetes
-        run: kubectl apply -f eks_nodo/
+      # Instalar el driver EFS CSI
+      - name: Install EFS CSI driver
+        run: |
+          kubectl apply -k "github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.5"
+          sleep 2
+          kubectl get pods -n kube-system
 
-      - name: Wait for resources to be ready
-        run: kubectl wait --for=condition=Ready pods --all --timeout=60s
+      # Aplicar StorageClass, PV y PVC
+      - name: Apply StorageClass, PV, and PVC
+        run: |
+          kubectl apply -f eks_nodo/storageclass-efs.yml
+          sleep 1  # Esperar 1 segundo
+          kubectl apply -f eks_nodo/pv.yml
+          sleep 1  # Esperar 1 segundo
+          kubectl apply -f eks_nodo/pvc.yml
+          sleep 1  # Esperar 1 segundo
 
-      - name: Show Kukernetes
+      # Desplegar PHP-FPM, LDAP y servicios
+      - name: Deploy PHP-FPM
+        run: kubectl apply -f eks_nodo/php-fpm-deployment.yml
+
+      - name: Wait for PHP-FPM
+        run: sleep 5  # Esperar 5 segundos
+
+      - name: Deploy LDAP
+        run: kubectl apply -f eks_nodo/deployment_pod_ldap.yml
+
+      - name: Wait for LDAP
+        run: sleep 5  # Esperar 5 segundos
+
+      - name: Deploy Services
+        run: kubectl apply -f eks_nodo/services.yml
+
+      - name: Wait for Services
+        run: sleep 3  # Esperar 3 segundos
+
+      # Desplegar aplicaciones web
+      - name: Deploy Apache
+        run: kubectl apply -f eks_nodo/deployment_pod_apache.yml
+
+      - name: Wait for Apache
+        run: sleep 8  # Esperar 8 segundos
+
+      - name: Deploy Charneco
+        run: kubectl apply -f eks_nodo/deployment_pod_charneco.yml
+
+      - name: Wait for Charneco
+        run: sleep 8  # Esperar 8 segundos
+
+      - name: Deploy Nginx
+        run: kubectl apply -f eks_nodo/deployment_pod_nginx.yml
+
+      - name: Wait for Nginx
+        run: sleep 8  # Esperar 8 segundos
+
+      # Verificar el estado de los recursos
+      - name: Show Kubernetes resources
         run: kubectl get all
