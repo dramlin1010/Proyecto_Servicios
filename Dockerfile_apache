@@ -1,0 +1,22 @@
+FROM rockylinux:8
+
+RUN dnf -y install httpd mod_ldap
+
+# Modulo LDAP
+RUN apachectl -M | grep ldap || echo "LDAP module not loaded" && \
+    apachectl -M | grep authnz_ldap || echo "authnz_ldap module not loaded"
+
+# Modulos de Apache (LDAP y authnz_ldap)
+RUN echo "LoadModule ldap_module modules/mod_ldap.so" >> /etc/httpd/conf/httpd.conf && \
+    echo "LoadModule authnz_ldap_module modules/mod_authnz_ldap.so" >> /etc/httpd/conf/httpd.conf
+
+RUN echo "Listen 33000" >> /etc/httpd/conf/httpd.conf
+RUN echo "DirectoryIndex index.html" >> /etc/httpd/conf/httpd.conf
+
+COPY conf.d/ldap.conf /etc/httpd/conf.d/
+COPY html/pagina-ldap.html /var/www/html/protected
+COPY html/index.html /var/www/html/index.html
+
+EXPOSE 33000
+
+CMD ["/usr/sbin/httpd", "-D", "FOREGROUND"]
