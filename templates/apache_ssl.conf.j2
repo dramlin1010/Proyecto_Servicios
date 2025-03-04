@@ -1,0 +1,18 @@
+<VirtualHost *:33000>
+    DocumentRoot /var/www/html
+
+    <Location "/protegido">
+        AuthType Basic
+        AuthName "LDAP Authentication"
+        AuthBasicProvider ldap
+        AuthLDAPURL "ldap://ldap-service:389/dc=daniel,dc=com"
+        AuthLDAPBindDN "cn=admin,dc=daniel,dc=com"
+        AuthLDAPBindPassword "admin"
+        Require valid-user
+    </Location>
+
+        Alias /protegido /var/www/html/protected
+<Directory /var/www/html/protected>
+    Require all granted
+</Directory>
+</VirtualHost>
