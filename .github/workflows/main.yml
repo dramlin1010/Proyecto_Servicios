@@ -26,3 +26,6 @@ jobs:
 
       - name: Apply Kubernetes
         run: kubectl apply -f eks_nodo/
+
+      - name: Show Kukernetes
+        run: kubectl get all
