@@ -1,0 +1,37 @@
+# Pod para contenedor-nginx-pvc
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pvc-pod
+  labels:
+    app: nginx-pvc
+spec:
+  containers:
+  - name: contenedor-nginx-pvc
+    image: 887465598388.dkr.ecr.us-east-1.amazonaws.com/nginx-rockylinux:version_pagina
+    imagePullPolicy: Always
+    ports:
+    - containerPort: 31000
+    volumeMounts:
+    - name: web-storage
+      mountPath: /etc/nginx/html
+  volumes:
+  - name: web-storage
+    persistentVolumeClaim:
+      claimName: web-pvc
+  imagePullSecrets:
+  - name: ecr-secret
+---
+# Service para contenedor-nginx-pvc
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-pvc-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx-pvc
+  ports:
+    - protocol: TCP
+      port: 31000
+      targetPort: 31000

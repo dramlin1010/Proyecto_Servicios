@@ -1,0 +1,30 @@
+# Pod para contenedor-nginx
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-version1-pod
+  labels:
+    app: nginx-version1
+spec:
+  containers:
+  - name: contenedor-nginx
+    image: 887465598388.dkr.ecr.us-east-1.amazonaws.com/nginx-rockylinux:version1
+    imagePullPolicy: Always
+    ports:
+    - containerPort: 32000
+  imagePullSecrets:
+  - name: ecr-secret
+---
+# Service para contenedor-nginx
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-version1-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx-version1
+  ports:
+    - protocol: TCP
+      port: 32000
+      targetPort: 32000

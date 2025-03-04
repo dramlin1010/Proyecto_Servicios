@@ -1,0 +1,30 @@
+# Pod para contenedor-apache
+apiVersion: v1
+kind: Pod
+metadata:
+  name: apache-pod
+  labels:
+    app: apache
+spec:
+  containers:
+  - name: contenedor-apache
+    image: 887465598388.dkr.ecr.us-east-1.amazonaws.com/nginx-rockylinux:ldap
+    imagePullPolicy: Always
+    ports:
+    - containerPort: 33000
+  imagePullSecrets:
+  - name: ecr-secret
+---
+# Service para contenedor-apache
+apiVersion: v1
+kind: Service
+metadata:
+  name: apache-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: apache
+  ports:
+    - protocol: TCP
+      port: 33000
+      targetPort: 33000

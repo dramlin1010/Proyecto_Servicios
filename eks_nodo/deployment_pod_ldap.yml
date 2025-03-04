@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ldap-pod
+  labels:
+    app: ldap
+spec:
+  containers:
+    - name: contenedor-ldap
+      image: osixia/openldap:latest
+      env:
+        - name: LDAP_ORGANISATION
+          value: "Daniel S.A"
+        - name: LDAP_DOMAIN
+          value: "daniel.com"
+        - name: LDAP_ADMIN_PASSWORD
+          value: "admin"
+      ports:
+        - containerPort: 389
+        - containerPort: 636
+      volumeMounts:
+        - name: ldap-bootstrap
+          mountPath: /tmp/ldif
+      lifecycle:
+        postStart:
+          exec:
+            command:
+              - /bin/sh
+              - -c
+              - |
+                echo "Copiando archivo LDIF a la ruta de bootstrap..."
+                cp /tmp/ldif/users.ldif /container/service/slapd/assets/config/bootstrap/ldif/50-users.ldif
+                echo "Archivo LDIF copiado correctamente."
+  volumes:
+    - name: ldap-bootstrap
+      configMap:
+        name: ldap-users
+        items:
+          - key: users.ldif
+            path: users.ldif
+  imagePullSecrets:
+    - name: ecr-secret
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ldap-users
+data:
+  users.ldif: |
+    dn: ou=users,dc=daniel,dc=com
+    objectClass: organizationalUnit
+    ou: users
+
+    dn: uid=pepe,ou=users,dc=daniel,dc=com
+    objectClass: top
+    objectClass: inetOrgPerson
+    objectClass: posixAccount
+    cn: Pepe
+    sn: Ruiz
+    givenName: Pepe
+    uid: pepe
+    uidNumber: 1001
+    gidNumber: 1001
+    homeDirectory: /home/pepe
+    loginShell: /bin/bash
+    mail: pepe@daniel.com
+    userPassword: pepe
+
+    dn: uid=jose,ou=users,dc=daniel,dc=com
+    objectClass: top
+    objectClass: inetOrgPerson
+    objectClass: posixAccount
+    cn: Jose
+    sn: Perez
+    givenName: Jose
+    uid: jose
+    uidNumber: 1002
+    gidNumber: 1002
+    homeDirectory: /home/jose
+    loginShell: /bin/bash
+    mail: jose@daniel.com
+    userPassword: jose

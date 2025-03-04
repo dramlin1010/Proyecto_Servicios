@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: php-fpm-deployment
+spec:
+  selector:
+    matchLabels:
+      app: php-fpm
+  template:
+    metadata:
+      labels:
+        app: php-fpm
+    spec:
+      containers:
+      - name: php-fpm
+        image: php:8.2-fpm
+        volumeMounts:
+        - name: web-storage
+          mountPath: "/etc/nginx/html"
+      volumes:
+      - name: web-storage
+        persistentVolumeClaim:
+          claimName: web-pvc  # Usa el mismo PVC compartido
