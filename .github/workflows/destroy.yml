@@ -35,58 +35,58 @@ jobs:
 
       # Eliminar aplicaciones web
       - name: Delete Nginx
-        run: kubectl delete -f deployment_pod_nginx.yml
+        run: kubectl delete -f eks_nodo/deployment_pod_nginx.yml
 
       - name: Wait after Nginx deletion
         run: sleep 8  # Esperar 8 segundos
 
       - name: Delete Charneco
-        run: kubectl delete -f deployment_pod_charneco.yml
+        run: kubectl delete -f eks_nodo/deployment_pod_charneco.yml
 
       - name: Wait after Charneco deletion
         run: sleep 8  # Esperar 8 segundos
 
       - name: Delete Apache
-        run: kubectl delete -f deployment_pod_apache.yml
+        run: kubectl delete -f eks_nodo/deployment_pod_apache.yml
 
       - name: Wait after Apache deletion
         run: sleep 8  # Esperar 8 segundos
 
       # Eliminar servicios
       - name: Delete Services
-        run: kubectl delete -f services.yml
+        run: kubectl delete -f eks_nodo/services.yml
 
       - name: Wait after Services deletion
         run: sleep 3  # Esperar 3 segundos
 
       # Eliminar PHP-FPM y LDAP
       - name: Delete LDAP
-        run: kubectl delete -f deployment_pod_ldap.yml
+        run: kubectl delete -f eks_nodo/deployment_pod_ldap.yml
 
       - name: Wait after LDAP deletion
         run: sleep 5  # Esperar 5 segundos
 
       - name: Delete PHP-FPM
-        run: kubectl delete -f php-fpm-deployment.yml
+        run: kubectl delete -f eks_nodo/php-fpm-deployment.yml
 
       - name: Wait after PHP-FPM deletion
         run: sleep 5  # Esperar 5 segundos
 
       # Eliminar StorageClass, PV y PVC
       - name: Delete PVC
-        run: kubectl delete -f pvc.yml
+        run: kubectl delete -f eks_nodo/pvc.yml
 
       - name: Wait after PVC deletion
         run: sleep 1  # Esperar 1 segundo
 
       - name: Delete PV
-        run: kubectl delete -f pv.yml
+        run: kubectl delete -f eks_nodo/pv.yml
 
       - name: Wait after PV deletion
         run: sleep 1  # Esperar 1 segundo
 
       - name: Delete StorageClass
-        run: kubectl delete -f storageclass-efs.yml
+        run: kubectl delete -f eks_nodo/storageclass-efs.yml
 
       - name: Wait after StorageClass deletion
         run: sleep 1  # Esperar 1 segundo
