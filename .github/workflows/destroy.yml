@@ -1,0 +1,101 @@
+name: EKS Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: "Escribe 'yes' para confirmar la destrucción"
+        required: true
+        default: "no"
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name mieks --region us-east-1
+
+      - name: Confirm destruction
+        if: ${{ github.event.inputs.confirm_destroy != 'yes' }}
+        run: |
+          echo "Destrucción no confirmada. Por favor, escribe 'yes' para confirmar."
+          exit 1
+
+      # Eliminar aplicaciones web
+      - name: Delete Nginx
+        run: kubectl delete -f deployment_pod_nginx.yml
+
+      - name: Wait after Nginx deletion
+        run: sleep 8  # Esperar 8 segundos
+
+      - name: Delete Charneco
+        run: kubectl delete -f deployment_pod_charneco.yml
+
+      - name: Wait after Charneco deletion
+        run: sleep 8  # Esperar 8 segundos
+
+      - name: Delete Apache
+        run: kubectl delete -f deployment_pod_apache.yml
+
+      - name: Wait after Apache deletion
+        run: sleep 8  # Esperar 8 segundos
+
+      # Eliminar servicios
+      - name: Delete Services
+        run: kubectl delete -f services.yml
+
+      - name: Wait after Services deletion
+        run: sleep 3  # Esperar 3 segundos
+
+      # Eliminar PHP-FPM y LDAP
+      - name: Delete LDAP
+        run: kubectl delete -f deployment_pod_ldap.yml
+
+      - name: Wait after LDAP deletion
+        run: sleep 5  # Esperar 5 segundos
+
+      - name: Delete PHP-FPM
+        run: kubectl delete -f php-fpm-deployment.yml
+
+      - name: Wait after PHP-FPM deletion
+        run: sleep 5  # Esperar 5 segundos
+
+      # Eliminar StorageClass, PV y PVC
+      - name: Delete PVC
+        run: kubectl delete -f pvc.yml
+
+      - name: Wait after PVC deletion
+        run: sleep 1  # Esperar 1 segundo
+
+      - name: Delete PV
+        run: kubectl delete -f pv.yml
+
+      - name: Wait after PV deletion
+        run: sleep 1  # Esperar 1 segundo
+
+      - name: Delete StorageClass
+        run: kubectl delete -f storageclass-efs.yml
+
+      - name: Wait after StorageClass deletion
+        run: sleep 1  # Esperar 1 segundo
+
+      # Eliminar el driver EFS CSI
+      - name: Delete EFS CSI driver
+        run: |
+          kubectl delete -k "github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.5"
+          kubectl get pods -n kube-system
+
+      - name: Verify resources deletion
+        run: kubectl get all
