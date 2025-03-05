@@ -20,7 +20,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
-
+      # :)
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name mieks --region us-east-1
 
